@@ -6,15 +6,17 @@ mutable struct  BidirectionalStream
     is_open::Threads.Atomic{Bool}
     input_channel::Channel{Proto.Transaction_Client}
     output_channel::Channel{Proto.Transaction_Server}
+    status::Task
 end
 
 function BidirectionalStream(input_channel::Channel{Proto.Transaction_Client},
-                             output_channel::Channel{Proto.Transaction_Server})
+                             output_channel::Channel{Proto.Transaction_Server},
+                             status::Task)
 
     dispatcher = Dispatcher(input_channel)
     res_collector = ResponseCollector(output_channel)
 
-    return BidirectionalStream(res_collector, dispatcher, Threads.Atomic{Bool}(true),input_channel, output_channel)
+    return BidirectionalStream(res_collector, dispatcher, Threads.Atomic{Bool}(true),input_channel, output_channel, status)
 end
 
 function single_request(bidirect_stream::BidirectionalStream, request::Proto.ProtoType)
@@ -27,32 +29,8 @@ function single_request(bidirect_stream::BidirectionalStream, request::T, batch:
     function.
 """
 function single_request(bidirect_stream::BidirectionalStream, request::Proto.Transaction_Req, batch::Bool)
-
-    res_channel = _open_result_channel(bidirect_stream, request, batch)
-
-    # start a task to collect the results asynchronusly
-    result_task = @async collect_result(res_channel, bidirect_stream)
-
-    # until solving the absent possibility to detect grpc errors in the gRPCClient a pure time
-    # dependent solutionresult = nothing
-    result = nothing
-    contr = Controller(true,5)
-    @async sleeper(contr)
-    while contr.running
-        yield()
-        if istaskdone(result_task)
-            result = fetch(result_task)
-            break
-        end
-    end
-    # remove the result channel from the respons collector.
-    delete!(bidirect_stream.resCollector, request.req_id)
-
-    if !istaskdone(result_task)
-        throw(gRPCServiceCallException("The server don't deliver an answer. Please check the server log"))
-    end
-
-    return result
+    answer = _process_request(bidirect_stream, request, batch)
+    return answer[1]
 end
 
 """
@@ -60,8 +38,39 @@ function stream_request(bidirect_stream::BidirectionalStream, request::T, batch:
     Here we let the user decide what to do with the result channel. The returned value is the pure result_channel.
 """
 function stream_request(bidirect_stream::BidirectionalStream, request::Proto.Transaction_Req, batch::Bool)
+    answer = _process_request(bidirect_stream, request, batch)
+    return answer
+end
+
+function _process_request(bidirect_stream::BidirectionalStream, request::Proto.Transaction_Req, batch::Bool)
+
     res_channel = _open_result_channel(bidirect_stream, request, batch)
-    return res_channel
+    # start a task to collect the results asynchronusly
+    result_task = @async collect_result(res_channel, bidirect_stream)
+
+    # until solving the absent possibility to detect grpc errors in the gRPCClient a pure time
+    # dependent solutionresult = nothing
+    answer = nothing
+    contr = Controller(true,5)
+    @async sleeper(contr)
+    while contr.running
+        yield()
+        if istaskdone(result_task)
+            answer = fetch(result_task)
+            break
+        end
+    end
+    # remove the result channel from the respons collector.
+    delete!(bidirect_stream.resCollector, request.req_id)
+
+    if !istaskdone(result_task)
+        close(bidirect_stream.input_channel)
+        failure_stat = fetch(bidirect_stream.status)
+        close(bidirect_stream)
+        @info "Failure: $failure_stat"
+    end
+
+    return answer
 end
 
 function _open_result_channel(bidirect_stream::BidirectionalStream, request::Proto.Transaction_Req, batch::Bool)

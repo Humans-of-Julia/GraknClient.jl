@@ -32,20 +32,19 @@ function CoreTransaction(session::CoreSession ,
 
     open_req = TransactionRequestBuilder.open_req(session.sessionID, type, proto_options,session.networkLatencyMillis)
 
-    bidirectionalStream = BidirectionalStream(input_channel, output_channel)
+    bidirectionalStream = BidirectionalStream(input_channel, output_channel,status)
     trans_id = uuid4()
     result = CoreTransaction(type, options, bidirectionalStream, trans_id, sessionId, request_timout)
 
     req_result = execute(result, open_req, false)
-    tmp_result = req_result[1]
-    kind_of_result = which_oneof(tmp_result, :res)
-    open_req_res = getproperty(tmp_result, kind_of_result)
+    kind_of_result = which_oneof(req_result, :res)
+    open_req_res = getproperty(req_result, kind_of_result)
 
     return result
 end
 
 function execute(transaction::T, request::R, batch::Bool) where {T<:AbstractCoreTransaction, R<:Proto.ProtoType}
-        return query(transaction, request, batch)
+    return query(transaction, request, batch)
 end
 
 function execute(transaction::T, request::R) where {T<:AbstractCoreTransaction, R<:Proto.ProtoType}
@@ -53,13 +52,19 @@ function execute(transaction::T, request::R) where {T<:AbstractCoreTransaction, 
 end
 
 function query(transaction::T, request::R) where {T<:AbstractCoreTransaction, R<:Proto.ProtoType}
-        return query(transaction, request, true);
+    return query(transaction, request, true);
 end
 
 function query(transaction::T, request::R, batch::Bool) where {T<:AbstractCoreTransaction, R<:Proto.ProtoType}
-        !is_open(transaction) && throw(TypeDBClientException(CLIENT_TRANSACTION_CLOSED))
-        result = single_request(transaction.bidirectional_stream, request, batch)
-        return result
+    !is_open(transaction) && throw(TypeDBClientException(CLIENT_TRANSACTION_CLOSED))
+    result = single_request(transaction.bidirectional_stream, request, batch)
+    return result
+end
+
+function stream(transaction::T, request::R, batch::Bool = true) where {T<:AbstractCoreTransaction, R<:Proto.ProtoType}
+    !is_open(transaction) && throw(TypeDBClientException(CLIENT_TRANSACTION_CLOSED))
+    result = stream_request(transaction.bidirectional_stream, request, batch)
+    return result
 end
 
 function is_open(transaction::T)::Bool where {T<:AbstractCoreTransaction}

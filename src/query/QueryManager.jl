@@ -1,7 +1,7 @@
 # This file is a part of TypeDBClient.  License is MIT: https://github.com/Humans-of-Julia/TypeDBClient.jl/blob/main/LICENSE
 
 function match(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result =  execute(transaction, QueryManagerRequestBuilder.match_req(query, options))
+    db_result =  stream(transaction, QueryManagerRequestBuilder.match_req(query, options))
     maps = map(x->ConceptMap(x), [entry.query_manager_res_part.match_res_part.answers for entry in db_result])
     result = reduce(vcat, maps)
     return result
@@ -14,21 +14,21 @@ function match_aggregate(transaction::AbstractCoreTransaction, query::String, op
 end
 
 function match_group(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result =  execute(transaction, QueryManagerRequestBuilder.match_group_req(query, options))
+    db_result =  stream(transaction, QueryManagerRequestBuilder.match_group_req(query, options))
     maps =  [ConceptMapGroup(item.query_manager_res_part.match_group_res_part.answers) for item in db_result]
     result = reduce(vcat, maps)
     return result
 end
 
 function match_group_aggregate(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result =  execute(transaction, QueryManagerRequestBuilder.match_group_aggregate_req(query, options))
+    db_result =  stream(transaction, QueryManagerRequestBuilder.match_group_aggregate_req(query, options))
     maps = [NumericGroup(item.match_group_aggregate_res_part.answers) for item in db_result]
     result = reduce(vcat, maps)
     return result
 end
 
 function insert(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result = execute(transaction, QueryManagerRequestBuilder.insert_req(query, options))
+    db_result = stream(transaction, QueryManagerRequestBuilder.insert_req(query, options))
     answers = [entry.query_manager_res_part.insert_res_part.answers for entry in db_result]
     maps = map(ConceptMap, answers)
     result = reduce(vcat, maps)
@@ -41,7 +41,7 @@ function delete(transaction::AbstractCoreTransaction, query::String, options = P
 end
 
 function update(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result = execute(transaction, QueryManagerRequestBuilder.update_req(query, options))
+    db_result = stream(transaction, QueryManagerRequestBuilder.update_req(query, options))
     answers = [entry.query_manager_res_part.update_res_part.answers for entry in db_result]
     maps = map(ConceptMap, answers)
     result = reduce(vcat, maps)

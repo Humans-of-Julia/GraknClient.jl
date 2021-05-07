@@ -5,7 +5,7 @@ mutable struct LogicManager <: AbstractLogicManager
 end
 
 function get_rule(log_mgr::AbstractLogicManager, label::String)
-    res = first(execute(log_mgr.transaction, LogicManagerRequestBuilder.get_rule_req(label)))
+    res = execute(log_mgr.transaction, LogicManagerRequestBuilder.get_rule_req(label))
     result = if which_oneof(res.logic_manager_res.get_rule_res, :res) == :rule
                 Rule(res.logic_manager_res.get_rule_res.rule)
              else
@@ -15,7 +15,7 @@ function get_rule(log_mgr::AbstractLogicManager, label::String)
 end
 
 function get_rules(log_mgr::AbstractLogicManager)
-    dbResult = execute(log_mgr.transaction, LogicManagerRequestBuilder.get_rules_req())
+    dbResult = stream(log_mgr.transaction, LogicManagerRequestBuilder.get_rules_req())
     answers = [res.logic_manager_res_part.get_rules_res_part.rules for res in dbResult]
     rules = map(Rule,answers)
     result = reduce(vcat, rules)
@@ -23,7 +23,7 @@ function get_rules(log_mgr::AbstractLogicManager)
 end
 
 function put_rule(log_mgr::AbstractLogicManager, label::String, when::String, then::String)
-    res = first(execute(log_mgr.transaction, LogicManagerRequestBuilder.put_rule_req(label, when, then)))
+    res = execute(log_mgr.transaction, LogicManagerRequestBuilder.put_rule_req(label, when, then))
     result = Rule(res.logic_manager_res.get_rule_res.rule)
     return result
 end
