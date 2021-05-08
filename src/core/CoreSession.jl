@@ -23,7 +23,7 @@ function CoreSession(client::T,
                      type::Int32,
                      options::TypeDBOptions = TypeDBOptions();
                      request_timout::Real=6) where {T<:AbstractCoreClient}
-    try
+    # try
         #building open_request
         open_req = SessionRequestBuilder.open_req(
             database, type , copy_to_proto(options, Proto.Options)
@@ -59,14 +59,14 @@ function CoreSession(client::T,
             @info "First attempt for transaction done and not successful"
         finally
         end
-        trans === nothing || close(trans)
+        trans !== nothing && close(trans)
 
         t.duration_in_seconds =  (PULSE_INTERVAL_MILLIS / 1000) - 0.5
 
         return result
-    catch ex
-        throw(TypeDBClientException("Error construct a CoreSession",ex))
-    end
+    # catch ex
+    #     throw(TypeDBClientException("Error construct a CoreSession",ex))
+    # end
 end
 
 """
@@ -97,7 +97,6 @@ function make_pulse_request(session::AbstractCoreSession, controller::Controller
     end
 end
 
-
 transaction(session::AbstractCoreSession, type::Int32) = transaction(session, type, typedb_options_core())
 function transaction(session::AbstractCoreSession, type::Int32, options::TypeDBOptions)
     try
@@ -121,7 +120,6 @@ function close(session::AbstractCoreSession)
         if session.isOpen
             for (uuid,trans) in session.transactions
                 close(trans)
-                delete!(session.transactions, trans.transaction_id)
             end
             remove_session(session.client, session)
             close(session.timer)
@@ -134,7 +132,15 @@ function close(session::AbstractCoreSession)
         end
     catch  ex
         throw(TypeDBClientException("Unexpected error while closing session ID: $(session.sessionID)",ex))
-        @info ex
+    finally
+        unlock(session.accessLock)
+    end
+end
+
+function Base.delete!(session::AbstractCoreSession, trans_id::UUID)
+    try
+        lock(session.accessLock)
+        delete!(session.transactions, trans_id)
     finally
         unlock(session.accessLock)
     end

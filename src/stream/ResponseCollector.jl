@@ -63,7 +63,6 @@ function response_worker(response_collector::ResponseCollector)
         catch ex
             @info "response_worker shows an error \n
             $ex"
-        finally
         end
     end
     @info "response_collector is Done"

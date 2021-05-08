@@ -27,7 +27,7 @@ function Base.show(io::IO, typedb_excption::TypeDBClientException)
     return nothing
 end
 
-function TypeDBClientException(err::Type{AbstractGeneralError}, parameters...)
+function TypeDBClientException(err::Type{T}, parameters...) where {T<:AbstractGeneralError}
     err = _build_error_messages(err)
     _params = parameters === nothing && Tuple{}()
     return TypeDBClientException(err, parameters, nothing, nothing)

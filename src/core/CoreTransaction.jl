@@ -7,6 +7,7 @@ struct CoreTransaction <: AbstractCoreTransaction
     transaction_id::Optional{UUID}
     session_id::Bytes
     request_timout::Real
+    session::AbstractCoreSession
 end
 
 function Base.show(io::IO, transaction::AbstractCoreTransaction)
@@ -27,19 +28,16 @@ function CoreTransaction(session::CoreSession ,
 
     grpc_controller = gRPCController(request_timeout=request_timout)
 
-    req_result, status = transaction(session.client.core_stub.blockingStub, grpc_controller, input_channel)
-    output_channel = grpc_result_or_error(req_result, status, result->result)
+    output_channel, status = transaction(session.client.core_stub.blockingStub, grpc_controller, input_channel)
+    grpc_result_or_error(output_channel, status, result->result)
 
     open_req = TransactionRequestBuilder.open_req(session.sessionID, type, proto_options,session.networkLatencyMillis)
 
-    bidirectionalStream = BidirectionalStream(input_channel, output_channel)
+    bidirectionalStream = BidirectionalStream(input_channel, output_channel, status)
     trans_id = uuid4()
-    result = CoreTransaction(type, options, bidirectionalStream, trans_id, sessionId, request_timout)
+    result = CoreTransaction(type, options, bidirectionalStream, trans_id, sessionId, request_timout, session)
 
     req_result = execute(result, open_req, false)
-    tmp_result = req_result[1]
-    kind_of_result = which_oneof(tmp_result, :res)
-    open_req_res = getproperty(tmp_result, kind_of_result)
 
     return result
 end
@@ -68,4 +66,6 @@ end
 
 function close(transaction::T)::Bool where {T<:AbstractCoreTransaction}
     close(transaction.bidirectional_stream)
+    delete!(transaction.session, transaction.transaction_id)
+    true
 end

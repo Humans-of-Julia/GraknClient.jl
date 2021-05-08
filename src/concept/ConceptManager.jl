@@ -1,7 +1,6 @@
 # This file is a part of TypeDBClient.  License is MIT: https://github.com/Humans-of-Julia/TypeDBClient.jl/blob/main/LICENSE
 
-# TODO How about `T <: AbstractCoreTransaction`?
-struct ConceptManager{T} <: AbstractConceptManager
+struct ConceptManager{T <: AbstractCoreTransaction} <: AbstractConceptManager
     txn::T
 end
 

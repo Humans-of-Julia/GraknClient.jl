@@ -6,15 +6,17 @@ mutable struct  BidirectionalStream
     is_open::Threads.Atomic{Bool}
     input_channel::Channel{Proto.Transaction_Client}
     output_channel::Channel{Proto.Transaction_Server}
+    status::Optional{Task}
 end
 
 function BidirectionalStream(input_channel::Channel{Proto.Transaction_Client},
-                             output_channel::Channel{Proto.Transaction_Server})
+                             output_channel::Channel{Proto.Transaction_Server},
+                             status::Optional{Task})
 
     dispatcher = Dispatcher(input_channel)
     res_collector = ResponseCollector(output_channel)
 
-    return BidirectionalStream(res_collector, dispatcher, Threads.Atomic{Bool}(true),input_channel, output_channel)
+    return BidirectionalStream(res_collector, dispatcher, Threads.Atomic{Bool}(true),input_channel, output_channel, status)
 end
 
 function single_request(bidirect_stream::BidirectionalStream, request::Proto.ProtoType)
@@ -36,20 +38,36 @@ function single_request(bidirect_stream::BidirectionalStream, request::Proto.Tra
     # until solving the absent possibility to detect grpc errors in the gRPCClient a pure time
     # dependent solutionresult = nothing
     result = nothing
+    answer = nothing
     contr = Controller(true,5)
     @async sleeper(contr)
     while contr.running
         yield()
         if istaskdone(result_task)
-            result = fetch(result_task)
+            answer = fetch(result_task)
             break
         end
     end
+
+    if !istaskdone(result_task)
+        close(bidirect_stream.input_channel)
+        failure_stat = fetch(bidirect_stream.status)
+        close(bidirect_stream)
+        @info "Failure: $failure_stat"
+    end
+
     # remove the result channel from the respons collector.
     delete!(bidirect_stream.resCollector, request.req_id)
 
-    if !istaskdone(result_task)
-        throw(gRPCServiceCallException("The server don't deliver an answer. Please check the server log"))
+    # Determine wether a result has one Transaction_Res or not
+    # If this is the case only the result without the surrounding array
+    # wil be given back.
+    if answer !== nothing
+        if length(answer) == 1 && typeof(answer[1]) == Proto.Transaction_Res
+            result = answer[1]
+        else
+            result = answer
+        end
     end
 
     return result
@@ -132,6 +150,8 @@ function _is_stream_respart_done(req_result::Transaction_Res_All, bidirect_strea
         req_push = true
         loop_break = false
         @debug "answer to req_id: $(req_result.req_id)"
+    else
+        throw(TypeDBClientException("Not known result type"))
     end
 
     return req_push, loop_break
@@ -139,9 +159,13 @@ end
 
 
 function close(stream::BidirectionalStream)
-    close(stream.input_channel)
-    close(stream.output_channel)
-    close(stream.dispatcher)
-    close(stream.resCollector)
+    try
+        close(stream.input_channel)
+        close(stream.output_channel)
+        close(stream.dispatcher)
+        close(stream.resCollector)
+    catch ex
+        throw(ex)
+    end
     return true
 end

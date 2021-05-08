@@ -2,36 +2,56 @@
 
 function match(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result =  execute(transaction, QueryManagerRequestBuilder.match_req(query, options))
-    maps = map(x->ConceptMap(x), [entry.query_manager_res_part.match_res_part.answers for entry in db_result])
-    result = reduce(vcat, maps)
+    if db_result !== nothing
+        maps = map(x->ConceptMap(x), [entry.query_manager_res_part.match_res_part.answers for entry in db_result])
+        result = reduce(vcat, maps)
+    else
+        result = nothing
+    end
     return result
 end
 
 function match_aggregate(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result =  execute(transaction, QueryManagerRequestBuilder.match_aggregate_req(query, options))
-    result = [_read_proto_number(entry.query_manager_res.match_aggregate_res.answer) for entry in db_result]
+    if db_result !== nothing
+        result = [_read_proto_number(entry.query_manager_res.match_aggregate_res.answer) for entry in db_result]
+    else
+        result = nothing
+    end
     return result
 end
 
 function match_group(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result =  execute(transaction, QueryManagerRequestBuilder.match_group_req(query, options))
-    maps =  [ConceptMapGroup(item.query_manager_res_part.match_group_res_part.answers) for item in db_result]
-    result = reduce(vcat, maps)
+    if db_result !== nothing
+        maps =  [ConceptMapGroup(item.query_manager_res_part.match_group_res_part.answers) for item in db_result]
+        result = reduce(vcat, maps)
+    else
+        result = nothing
+    end
     return result
 end
 
 function match_group_aggregate(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result =  execute(transaction, QueryManagerRequestBuilder.match_group_aggregate_req(query, options))
-    maps = [NumericGroup(item.match_group_aggregate_res_part.answers) for item in db_result]
-    result = reduce(vcat, maps)
+    if db_result !== nothing
+        maps = [NumericGroup(item.match_group_aggregate_res_part.answers) for item in db_result]
+        result = reduce(vcat, maps)
+    else
+        result = nothing
+    end
     return result
 end
 
 function insert(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result = execute(transaction, QueryManagerRequestBuilder.insert_req(query, options))
-    answers = [entry.query_manager_res_part.insert_res_part.answers for entry in db_result]
-    maps = map(ConceptMap, answers)
-    result = reduce(vcat, maps)
+    if db_result !== nothing
+        answers = [entry.query_manager_res_part.insert_res_part.answers for entry in db_result]
+        maps = map(ConceptMap, answers)
+        result = reduce(vcat, maps)
+    else
+        result = nothing
+    end
     return result
 end
 
@@ -42,9 +62,13 @@ end
 
 function update(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
     db_result = execute(transaction, QueryManagerRequestBuilder.update_req(query, options))
-    answers = [entry.query_manager_res_part.update_res_part.answers for entry in db_result]
-    maps = map(ConceptMap, answers)
-    result = reduce(vcat, maps)
+    if db_result !== nothing
+        answers = [entry.query_manager_res_part.update_res_part.answers for entry in db_result]
+        maps = map(ConceptMap, answers)
+        result = reduce(vcat, maps)
+    else
+        result = nothing
+    end
     return result
 end
 
@@ -54,11 +78,11 @@ function explain(transaction::AbstractCoreTransaction, explainable::AbstractExpl
 end
 
 function define(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result = execute(transaction, QueryManagerRequestBuilder.define_req(; define_req = query, options))
+    db_result = execute(transaction, QueryManagerRequestBuilder.define_req(query, options))
     return nothing
 end
 
 function undefine(transaction::AbstractCoreTransaction, query::String, options = Proto.Options())
-    db_result = execute(transaction, QueryManagerRequestBuilder.undefine_req(; undefine_req = query, options))
+    db_result = execute(transaction, QueryManagerRequestBuilder.undefine_req(query, options))
     return nothing
 end
